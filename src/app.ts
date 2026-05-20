@@ -7,13 +7,11 @@ import express, {
 } from "express";
 import helmet from "helmet";
 import morgan from "morgan";
-import {
-  apiRateLimiter,
-  authRateLimiter,
-} from "./middleware/rateLimiter.middleware.js";
-import analyticsRoutes from "./routes/analytics.routes.js";
 import articleRoutes from "./routes/article.routes.js";
 import authRoutes from "./routes/auth.routes.js";
+import analyticsRoutes from "./routes/analytics.routes.js";
+import { apiRateLimiter, authRateLimiter } from "./middleware/rateLimiter.middleware.js";
+import { scheduleDailyAnalytics, processYesterdayAnalytics, getQueueStatus } from "./services/jobQueue.service.js";
 
 // Load environment variables
 dotenv.config();
@@ -34,7 +32,7 @@ app.use("/api/author", apiRateLimiter);
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/articles", articleRoutes);
-app.use("/api/author", analyticsRoutes);
+app.use('/api/author', analyticsRoutes);
 
 // Health check endpoint (no rate limiting)
 app.get("/health", (req: Request, res: Response) => {
@@ -44,6 +42,26 @@ app.get("/health", (req: Request, res: Response) => {
     Object: { timestamp: new Date().toISOString() },
     Errors: null,
   });
+});
+
+// Queue status endpoint (for monitoring)
+app.get("/queue/status", async (req: Request, res: Response) => {
+  try {
+    const status = await getQueueStatus();
+    res.json({
+      Success: true,
+      Message: "Queue status retrieved",
+      Object: status,
+      Errors: null
+    });
+  } catch (error) {
+    res.status(500).json({
+      Success: false,
+      Message: "Failed to get queue status",
+      Object: null,
+      Errors: [String(error)]
+    });
+  }
 });
 
 // Root endpoint
@@ -80,13 +98,36 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
+// Start server and initialize job queue
 const PORT = process.env.PORT || 3000;
 
 if (process.env.NODE_ENV !== "test") {
-  app.listen(PORT, () => {
+  // Start the server
+  app.listen(PORT, async () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📝 Environment: ${process.env.NODE_ENV || "development"}`);
     console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+    
+    // Initialize job queue (only if Redis is configured)
+    if (process.env.REDIS_URL) {
+      try {
+        console.log('🔄 Initializing analytics job queue...');
+        await processYesterdayAnalytics();
+        scheduleDailyAnalytics();
+        console.log('✅ Analytics job queue started successfully');
+        
+        // Show queue status after 2 seconds
+        setTimeout(async () => {
+          const status = await getQueueStatus();
+          console.log('📊 Queue status:', status);
+        }, 2000);
+      } catch (error) {
+        console.warn('⚠️ Redis connection failed. Analytics job queue disabled.');
+        console.warn('   Make sure Redis is running on', process.env.REDIS_URL);
+      }
+    } else {
+      console.log('ℹ️ REDIS_URL not set. Analytics job queue disabled.');
+    }
   });
 }
 

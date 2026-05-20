@@ -12,13 +12,13 @@ export const authRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skipSuccessfulRequests: true, // Don't count successful logins
+  skipSuccessfulRequests: true,
 });
 
-// Rate limiter for article reads - prevents 100 reads in 10 seconds
+// Rate limiter for article reads
 export const readRateLimiter = rateLimit({
-  windowMs: 10 * 1000, // 10 seconds
-  max: 100, // 100 requests per 10 seconds (as per requirement)
+  windowMs: 10 * 1000,
+  max: 100,
   message: {
     Success: false,
     Message: "Too many read requests",
@@ -27,15 +27,12 @@ export const readRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => {
-    return req.user?.id || req.ip || "anonymous";
-  },
 });
 
-// Stricter limiter for non-authenticated users reading articles
+// Stricter limiter for non-authenticated users
 export const publicReadRateLimiter = rateLimit({
-  windowMs: 10 * 1000, // 10 seconds
-  max: 20, // 20 requests for non-authenticated users
+  windowMs: 10 * 1000,
+  max: 20,
   message: {
     Success: false,
     Message: "Too many read requests",
@@ -46,13 +43,12 @@ export const publicReadRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.ip || "anonymous",
 });
 
-// General API rate limiter (optional)
+// General API rate limiter
 export const apiRateLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 200, // 200 requests per minute
+  windowMs: 60 * 1000,
+  max: 200,
   message: {
     Success: false,
     Message: "Too many requests",
@@ -61,8 +57,5 @@ export const apiRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => {
-    // Skip for health check endpoint
-    return req.path === "/health";
-  },
+  skip: (req) => req.path === "/health",
 });
